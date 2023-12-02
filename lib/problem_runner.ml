@@ -14,11 +14,16 @@ module Run_mode = struct
     | Test_from_puzzle_input of { credentials : Credentials.t option }
     | Submit of { credentials : Credentials.t }
 
-  let read_file (filename : string) : string =
-    let ch = open_in_bin filename in
-    let s = really_input_string ch (in_channel_length ch) in
-    close_in ch;
-    s
+  let read_file (filename : string) : string list =
+    let file = open_in filename in
+    let rec loop acc =
+      match input_line file with
+      | line -> loop (line :: acc)
+      | exception End_of_file -> List.rev acc
+    in
+    let lines = loop [] in
+    close_in file;
+    lines
 
   let write_file (filename : string) (contents : string) : unit =
     let ch = open_out_bin filename in
@@ -26,7 +31,7 @@ module Run_mode = struct
     close_out ch
 
   let get_puzzle_input (year : int) (day : int)
-      (credentials : Credentials.t option) : (string, string) result =
+      (credentials : Credentials.t option) : (string list, string) result =
     (* Create cache directory structure *)
     let () =
       if not (Sys.file_exists "inputs") then Sys.mkdir "inputs" 0o777 else ()
@@ -65,9 +70,9 @@ module Run_mode = struct
           let* response = Piaf.Client.Oneshot.get ~headers uri in
           let* body = Piaf.Body.to_string response.body in
           write_file filename body;
-          Lwt_result.return body
+          Lwt_result.return (read_file filename)
 
-  let get_input (year : int) (day : int) : t -> (string, string) result =
+  let get_input (year : int) (day : int) : t -> (string list, string) result =
     function
     | Test_from_puzzle_input { credentials } ->
         get_puzzle_input year day credentials
